@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Mowgli Household</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#030712;color:#f9fafb}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+input[type=number]{-moz-appearance:textfield}
+.sortable-ghost{opacity:.35}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:#374151;border-radius:3px}
+.card{background:#111827;border:1px solid #1f2937;border-radius:.75rem;padding:1rem}
+.inp{width:100%;background:#1f2937;border:1px solid #374151;border-radius:.5rem;padding:.5rem .75rem;font-size:.875rem;color:#f9fafb;outline:none;transition:border-color .15s}
+.inp:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.2)}
+.inp::placeholder{color:#6b7280}
+.lbl{display:block;font-size:.7rem;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.375rem}
+.btn{display:inline-flex;align-items:center;gap:.4rem;padding:.5rem 1rem;border-radius:.5rem;font-size:.875rem;font-weight:500;cursor:pointer;border:none;transition:background .15s}
+.btn-primary{background:#6366f1;color:#fff}.btn-primary:hover{background:#4f46e5}
+.btn-secondary{background:#1f2937;border:1px solid #374151;color:#d1d5db}.btn-secondary:hover{background:#374151}
+.btn-danger{background:#e11d48;color:#fff}.btn-danger:hover{background:#be123c}
+.btn-ghost{background:transparent;color:#9ca3af;padding:.375rem;border-radius:.5rem}.btn-ghost:hover{background:#1f2937;color:#f9fafb}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.tab-active{background:rgba(99,102,241,.15);color:#818cf8}
+.tab-inactive{color:#6b7280}.tab-inactive:hover{color:#f9fafb;background:rgba(255,255,255,.05)}
+.bar-bg{background:#1f2937;border-radius:9999px;height:6px;overflow:hidden}
+.bar-fill{height:6px;border-radius:9999px;transition:width .4s}
+.modal-overlay{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);display:flex;align-items:flex-end;justify-content:center;padding:0}
+@media(min-width:640px){.modal-overlay{align-items:center;padding:1rem}}
+.modal-box{position:relative;width:100%;max-width:32rem;background:#111827;border:1px solid #374151;border-radius:1rem 1rem 0 0;max-height:92vh;overflow-y:auto}
+@media(min-width:640px){.modal-box{border-radius:1rem}}
+</style>
+</head>
+<body>
+
+<div style="display:flex;min-height:100vh">
+
+  <!-- Sidebar (desktop) -->
+  <aside id="sidebar" style="width:14rem;flex-shrink:0;background:#0f172a;border-right:1px solid #1f2937;display:flex;flex-direction:column">
+    <div style="padding:1.5rem 1.25rem;border-bottom:1px solid #1f2937">
+      <div style="font-weight:700;font-size:1rem;color:#f9fafb">The Mowgli Household</div>
+      <div style="font-size:.7rem;color:#6b7280;margin-top:.2rem">Household Planner</div>
+    </div>
+    <nav id="desktop-nav" style="flex:1;padding:.75rem .5rem;display:flex;flex-direction:column;gap:.25rem"></nav>
+  </aside>
+
+  <!-- Main -->
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+
+    <!-- Mobile header -->
+    <header id="mobile-header" style="background:#0f172a;border-bottom:1px solid #1f2937;padding:.75rem 1rem;display:none">
+      <div style="font-weight:700;color:#f9fafb">The Mowgli Household</div>
+    </header>
+
+    <!-- Page content -->
+    <main id="page" style="flex:1;overflow:auto;padding:2rem">
+      <div id="content" style="max-width:56rem;margin:0 auto"></div>
+    </main>
+
+    <!-- Mobile bottom nav -->
+    <nav id="mobile-nav" style="background:#0f172a;border-top:1px solid #1f2937;display:none;position:fixed;bottom:0;left:0;right:0;z-index:40"></nav>
+  </div>
+</div>
+
+<!-- Modal -->
+<div id="modal" style="display:none" class="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <div id="modal-inner"></div>
+  </div>
+</div>
+
+<script>
+// ─── Data ────────────────────────────────────────────────────────────────────
+
+const DEFAULT_ACCOUNTS = [
+  {id:'daily-expenses',name:'Daily Expenses',pct:60,  bal:0,    goal:null, rule:'redistribute',destId:'',active:true,order:0,color:'indigo'},
+  {id:'dog',           name:'Dog',           pct:2.5, bal:2400, goal:3000, rule:'redistribute',destId:'',active:true,order:1,color:'amber'},
+  {id:'joint',         name:'Joint',         pct:2.5, bal:0,    goal:null, rule:'redistribute',destId:'',active:true,order:2,color:'emerald'},
+  {id:'partner',       name:'Partner',       pct:2.5, bal:0,    goal:null, rule:'redistribute',destId:'',active:true,order:3,color:'violet'},
+  {id:'me',            name:'Me',            pct:2.5, bal:0,    goal:null, rule:'redistribute',destId:'',active:true,order:4,color:'sky'},
+  {id:'travel',        name:'Travel',        pct:3.67,bal:0,    goal:null, rule:'redistribute',destId:'',active:true,order:5,color:'teal'},
+  {id:'visa',          name:'Visa',          pct:3.67,bal:0,    goal:null, rule:'redistribute',destId:'',active:true,order:6,color:'rose'},
+  {id:'wedding',       name:'Wedding',       pct:3.67,bal:8000, goal:20000,rule:'redistribute',destId:'',active:true,order:7,color:'pink'},
+  {id:'mojo',          name:'MOJO',          pct:9,   bal:15000,goal:null, rule:'redistribute',destId:'',active:true,order:8,color:'orange'},
+  {id:'car',           name:'Car',           pct:10,  bal:0,    goal:null, rule:'redistribute',destId:'',active:true,order:9,color:'cyan'},
+];
+
+const COLORS = ['indigo','violet','emerald','amber','rose','sky','teal','orange','pink','cyan','lime','red'];
+const CM = {
+  indigo: {dot:'#6366f1',text:'#818cf8',border:'rgba(99,102,241,.3)'},
+  violet: {dot:'#8b5cf6',text:'#a78bfa',border:'rgba(139,92,246,.3)'},
+  emerald:{dot:'#10b981',text:'#34d399',border:'rgba(16,185,129,.3)'},
+  amber:  {dot:'#f59e0b',text:'#fbbf24',border:'rgba(245,158,11,.3)'},
+  rose:   {dot:'#f43f5e',text:'#fb7185',border:'rgba(244,63,94,.3)'},
+  sky:    {dot:'#0ea5e9',text:'#38bdf8',border:'rgba(14,165,233,.3)'},
+  teal:   {dot:'#14b8a6',text:'#2dd4bf',border:'rgba(20,184,166,.3)'},
+  orange: {dot:'#f97316',text:'#fb923c',border:'rgba(249,115,22,.3)'},
+  pink:   {dot:'#ec4899',text:'#f472b6',border:'rgba(236,72,153,.3)'},
+  cyan:   {dot:'#06b6d4',text:'#22d3ee',border:'rgba(6,182,212,.3)'},
+  lime:   {dot:'#84cc16',text:'#a3e635',border:'rgba(132,204,22,.3)'},
+  red:    {dot:'#ef4444',text:'#f87171',border:'rgba(239,68,68,.3)'},
+};
+
+const SK = 'fos-v4';
+function loadState() { try { const r=localStorage.getItem(SK); return r?JSON.parse(r):null; } catch{return null;} }
+function saveState() { try { localStorage.setItem(SK,JSON.stringify(S)); } catch{} }
+
+const saved = loadState();
+const S = {
+  accounts: saved ? saved.accounts : JSON.parse(JSON.stringify(DEFAULT_ACCOUNTS)),
+  entries:  saved ? (saved.entries||[])  : [],
+  snaps:    saved ? (saved.snaps||[])    : [],
+  cfg:      saved ? (saved.cfg||{sym:'$',myName:'Me',partnerName:'Partner'}) : {sym:'$',myName:'Me',partnerName:'Partner'},
+};
+
+const session = {
+  tab:'dashboard', myInc:'', parInc:'', notes:'', applyBal:true, weeklySaved:false,
+  overrides:{}, // {accountId: {pct, amt, locked}} — per-session allocation overrides
+  showArch:false, forecastInc:'',
+  modalAccId:null, mf:{},
+};
+
+// ─── Utils ────────────────────────────────────────────────────────────────────
+
+function uid() { return Math.random().toString(36).slice(2)+Date.now().toString(36); }
+function h(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmt(v) { return S.cfg.sym + Math.round(v||0).toLocaleString('en-AU'); }
+function fmtD(v) { return S.cfg.sym + (v||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function totPct() { return S.accounts.filter(a=>a.active).reduce((s,a)=>s+(parseFloat(a.pct)||0),0); }
+function alloc(total) {
+  const act = S.accounts.filter(a=>a.active);
+  const r = {};
+  act.forEach(a => { r[a.id] = 0; });
+
+  // First pass: allocate percentages, capping at goal remainder
+  let surplus = 0;
+  const uncapped = []; // accounts that didn't hit their cap (no goal or not full)
+
+  act.forEach(a => {
+    const raw = (total * (parseFloat(a.pct) || 0)) / 100;
+    if (a.goal != null) {
+      const rem = Math.max(0, a.goal - (a.bal || 0));
+      if (rem <= 0) {
+        // Already at/above goal — apply overflow rule
+        if (a.rule === 'stop') {
+          surplus += raw;
+        } else if (a.rule === 'redirect' && a.destId) {
+          const dest = act.find(x => x.id === a.destId);
+          if (dest) r[dest.id] = (r[dest.id] || 0) + raw;
+          else surplus += raw;
+        } else {
+          // redistribute: will be handled in second pass
+          surplus += raw;
+          return; // don't mark as uncapped
+        }
+      } else if (raw > rem) {
+        // Partially fills the goal
+        r[a.id] = rem;
+        const overage = raw - rem;
+        if (a.rule === 'stop') {
+          surplus += overage;
+        } else if (a.rule === 'redirect' && a.destId) {
+          const dest = act.find(x => x.id === a.destId);
+          if (dest) r[dest.id] = (r[dest.id] || 0) + overage;
+          else surplus += overage;
+        } else {
+          surplus += overage; // redistribute in second pass
+        }
+      } else {
+        r[a.id] = raw;
+        uncapped.push(a);
+      }
+    } else {
+      r[a.id] = raw;
+      uncapped.push(a);
+    }
+  });
+
+  // Second pass: redistribute surplus proportionally among uncapped accounts
+  if (surplus > 0 && uncapped.length > 0) {
+    const totalPct = uncapped.reduce((s, a) => s + (parseFloat(a.pct) || 0), 0);
+    if (totalPct > 0) {
+      uncapped.forEach(a => {
+        r[a.id] += surplus * ((parseFloat(a.pct) || 0) / totalPct);
+      });
+    }
+    // If no uncapped accounts to redistribute to, surplus is just dropped (stop behavior)
+  }
+
+  return r;
+}
+function incStats() {
+  if(!S.entries.length) return {weekly:0,monthly:0,annual:0};
+  const avg=S.entries.reduce((s,e)=>s+(e.total||0),0)/S.entries.length;
+  return {weekly:avg,monthly:avg*(52/12),annual:avg*52};
+}
+// Goal-aware alloc for unlocked accounts given a sub-total and subset of accounts
+function _allocSubset(remaining, subset, allAct) {
+  const r = {};
+  subset.forEach(a => { r[a.id] = 0; });
+  if (remaining <= 0 || !subset.length) return r;
+  const totalPct = subset.reduce((s,a) => s+(parseFloat(a.pct)||0), 0);
+  let surplus = 0;
+  const uncapped = [];
+  subset.forEach(a => {
+    const raw = totalPct > 0 ? (remaining*(parseFloat(a.pct)||0))/totalPct : 0;
+    if (a.goal != null) {
+      const rem = Math.max(0, a.goal-(a.bal||0));
+      if (rem <= 0) {
+        if (a.rule==='stop') { surplus+=raw; }
+        else if (a.rule==='redirect'&&a.destId) { const d=allAct.find(x=>x.id===a.destId); if(d)r[d.id]=(r[d.id]||0)+raw; else surplus+=raw; }
+        else surplus+=raw;
+      } else if (raw > rem) {
+        r[a.id]=rem; const ov=raw-rem;
+        if (a.rule==='stop') { surplus+=ov; }
+        else if (a.rule==='redirect'&&a.destId) { const d=allAct.find(x=>x.id===a.destId); if(d)r[d.id]=(r[d.id]||0)+ov; else surplus+=ov; }
+        else surplus+=ov;
+      } else { r[a.id]=raw; uncapped.push(a); }
+    } else { r[a.id]=raw; uncapped.push(a); }
+  });
+  if (surplus>0&&uncapped.length>0) {
+    const ucPct=uncapped.reduce((s,a)=>s+(parseFloat(a.pct)||0),0);
+    if(ucPct>0) uncapped.forEach(a=>{ r[a.id]+=surplus*((parseFloat(a.pct)||0)/ucPct); });
+  }
+  return r;
+}
+
+// Computes final per-account amounts, respecting session.overrides locks
+function computeAlloc(total) {
+  if (total<=0) return {};
+  const act = active();
+  const r = {};
+  act.forEach(a => { r[a.id]=0; });
+  const locked   = act.filter(a => session.overrides[a.id]?.locked);
+  const unlocked = act.filter(a => !session.overrides[a.id]?.locked);
+  let lockedTotal = 0;
+  locked.forEach(a => {
+    const amt = Math.max(0, parseFloat(session.overrides[a.id]?.amt)||0);
+    r[a.id] = amt; lockedTotal += amt;
+  });
+  const remaining = Math.max(0, total-lockedTotal);
+  const sub = _allocSubset(remaining, unlocked, act);
+  unlocked.forEach(a => { r[a.id] = (r[a.id]||0)+(sub[a.id]||0); });
+  return r;
+}
+
+function lockPct(id, pctStr) {
+  const total = (parseFloat(session.myInc)||0)+(parseFloat(session.parInc)||0);
+  const pct = parseFloat(pctStr)||0;
+  const amt = total>0 ? (total*pct/100) : 0;
+  session.overrides[id] = {pct, amt, locked:true};
+  refreshAllocTable();
+}
+function lockAmt(id, amtStr) {
+  const total = (parseFloat(session.myInc)||0)+(parseFloat(session.parInc)||0);
+  const amt = parseFloat(amtStr)||0;
+  const pct = total>0 ? (amt/total*100) : 0;
+  session.overrides[id] = {pct, amt, locked:true};
+  refreshAllocTable();
+}
+function unlockRow(id) {
+  delete session.overrides[id];
+  refreshAllocTable();
+}
+function unlockAll() {
+  session.overrides={};
+  refreshAllocTable();
+}
+
+function buildAllocTable(total, act) {
+  const al = computeAlloc(total);
+  const totalAllocated = Object.values(al).reduce((s,v)=>s+v,0);
+  const rows = act.map(a => {
+    const amt=al[a.id]||0, newB=(a.bal||0)+amt, c=CM[a.color]||CM.indigo;
+    const ov=session.overrides[a.id], isLocked=ov?.locked;
+    const dispPct = isLocked ? (ov.pct||0).toFixed(2) : a.pct;
+    const dispAmt = amt.toFixed(2);
+    return `<tr style="border-bottom:1px solid rgba(31,41,55,.5)">
+      <td style="padding:.5rem .75rem">
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <span style="width:8px;height:8px;border-radius:50%;background:${c.dot};flex-shrink:0"></span>
+          <span style="color:#f9fafb;font-size:.875rem">${h(a.name)}</span>
+          ${isLocked?`<span style="font-size:.6rem;background:rgba(99,102,241,.2);color:#818cf8;border-radius:.25rem;padding:.1rem .35rem;letter-spacing:.04em">LOCKED</span>`:''}
+        </div>
+      </td>
+      <td style="padding:.5rem .75rem;text-align:right">
+        <input type="number" min="0" max="100" step="0.01"
+          style="width:5.5rem;background:#0f172a;border:1px solid ${isLocked?'#6366f1':'#374151'};border-radius:.375rem;padding:.3rem .5rem;color:${c.text};font-size:.8rem;text-align:right;font-family:monospace;outline:none"
+          value="${dispPct}"
+          oninput="lockPct('${a.id}',this.value)">
+        <span style="color:#6b7280;font-size:.75rem">%</span>
+      </td>
+      <td style="padding:.5rem .75rem;text-align:right">
+        <input type="number" min="0" step="0.01"
+          style="width:6.5rem;background:#0f172a;border:1px solid ${isLocked?'#6366f1':'#374151'};border-radius:.375rem;padding:.3rem .5rem;color:#f9fafb;font-size:.8rem;text-align:right;font-weight:600;outline:none"
+          value="${dispAmt}"
+          oninput="lockAmt('${a.id}',this.value)">
+      </td>
+      <td style="padding:.5rem .75rem;text-align:right;color:#9ca3af;font-size:.8rem;font-variant-numeric:tabular-nums">${fmt(a.bal||0)}</td>
+      <td style="padding:.5rem .75rem;text-align:right;font-size:.8rem;font-weight:500;font-variant-numeric:tabular-nums;color:${a.goal&&newB>=a.goal?'#34d399':'#a5b4fc'}">${fmt(newB)}</td>
+      <td style="padding:.5rem .5rem;text-align:center">
+        ${isLocked?`<button onclick="unlockRow('${a.id}')" title="Unlock" style="background:none;border:none;cursor:pointer;color:#6b7280;padding:.2rem;border-radius:.25rem" onmouseover="this.style.color='#f9fafb'" onmouseout="this.style.color='#6b7280'">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </button>`:`<span style="width:21px;display:inline-block"></span>`}
+      </td>
+    </tr>`;
+  }).join('');
+
+  const hasLocks = Object.values(session.overrides).some(o=>o.locked);
+  return `
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+        <div style="font-size:.7rem;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">Allocations — edit % or $ to lock a row</div>
+        ${hasLocks?`<button onclick="unlockAll()" style="font-size:.7rem;color:#818cf8;background:none;border:none;cursor:pointer;padding:0">Reset all</button>`:''}
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:.875rem">
+            <thead><tr style="border-bottom:1px solid #1f2937">
+              <th style="text-align:left;padding:.5rem .75rem;color:#9ca3af;font-weight:500;font-size:.8rem">Account</th>
+              <th style="text-align:right;padding:.5rem .75rem;color:#9ca3af;font-weight:500;font-size:.8rem">%</th>
+              <th style="text-align:right;padding:.5rem .75rem;color:#9ca3af;font-weight:500;font-size:.8rem">Amount</th>
+              <th style="text-align:right;padding:.5rem .75rem;color:#9ca3af;font-weight:500;font-size:.8rem">Current</th>
+              <th style="text-align:right;padding:.5rem .75rem;color:#9ca3af;font-weight:500;font-size:.8rem">→ New</th>
+              <th style="width:2rem"></th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+            <tfoot><tr style="border-top:1px solid #374151;background:rgba(31,41,55,.4)">
+              <td style="padding:.5rem .75rem;font-weight:600;color:#f9fafb;font-size:.8rem">Total</td>
+              <td colspan="1"></td>
+              <td style="padding:.5rem .75rem;text-align:right;font-weight:700;color:#f9fafb;font-variant-numeric:tabular-nums;font-size:.8rem">${fmtD(totalAllocated)}</td>
+              <td colspan="3"></td>
+            </tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+
+function refreshAllocTable() {
+  const total=(parseFloat(session.myInc)||0)+(parseFloat(session.parInc)||0);
+  const el=document.getElementById('alloc-table');
+  if(!el) return;
+  if(total<=0){el.innerHTML='';return;}
+  el.innerHTML=buildAllocTable(total,active());
+}
+
+function weeksLeft(bal,goal,weekly) {
+  if(!goal||weekly<=0) return null;
+  const rem=goal-bal; if(rem<=0) return 0;
+  return Math.ceil(rem/weekly);
+}
+function dateInWeeks(w) {
+  const d=new Date(); d.setDate(d.getDate()+w*7);
+  return d.toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'});
+}
+function toCSV(rows) { return rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n'); }
+function dlCSV(content,name) {
+  const b=new Blob([content],{type:'text/csv;charset=utf-8;'});
+  const u=URL.createObjectURL(b);
+  const a=document.createElement('a'); a.href=u; a.download=name; a.click(); URL.revokeObjectURL(u);
+}
+function active() { return S.accounts.filter(a=>a.active).sort((a,b)=>a.order-b.order); }
+function bar(val,max,color) {
+  const pct=max>0?Math.min(100,(val/max)*100):0;
+  return `<div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${color||'#6366f1'}"></div></div>`;
+}
+
+// ─── Nav ──────────────────────────────────────────────────────────────────────
+
+const TABS = [
+  {id:'dashboard',label:'Dashboard',short:'Home'},
+  {id:'accounts', label:'Accounts', short:'Accts'},
+  {id:'weekly',   label:'Weekly',   short:'Weekly'},
+  {id:'history',  label:'History',  short:'History'},
+  {id:'forecast', label:'Forecast', short:'Forecast'},
+  {id:'settings', label:'Settings', short:'Settings'},
+];
+
+const TAB_ICONS = {
+  dashboard: `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
+  accounts:  `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>`,
+  weekly:    `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+  history:   `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  forecast:  `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`,
+  settings:  `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+};
+
+function renderNav() {
+  const dn = document.getElementById('desktop-nav');
+  const mn = document.getElementById('mobile-nav');
+  dn.innerHTML = TABS.map(t=>`
+    <button onclick="go('${t.id}')" style="display:flex;align-items:center;gap:.6rem;padding:.5rem .75rem;border-radius:.5rem;border:none;cursor:pointer;font-size:.875rem;font-weight:500;width:100%;text-align:left;transition:background .15s;background:${session.tab===t.id?'rgba(99,102,241,.15)':'transparent'};color:${session.tab===t.id?'#818cf8':'#6b7280'}">
+      ${TAB_ICONS[t.id]}<span>${t.label}</span>
+    </button>`).join('');
+  mn.innerHTML = TABS.map(t=>`
+    <button onclick="go('${t.id}')" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:.6rem .2rem;gap:.2rem;font-size:.55rem;font-weight:500;border:none;background:transparent;cursor:pointer;color:${session.tab===t.id?'#818cf8':'#6b7280'}">
+      ${TAB_ICONS[t.id].replace('17','18')}<span>${t.short}</span>
+    </button>`).join('');
+}
+
+function go(tab) { if(session.tab==='weekly'&&tab!=='weekly') session.overrides={}; session.tab=tab; renderNav(); render(); }
+
+// ─── Responsive ───────────────────────────────────────────────────────────────
+
+function applyLayout() {
+  const mobile = window.innerWidth < 1024;
+  document.getElementById('sidebar').style.display = mobile?'none':'flex';
+  document.getElementById('mobile-header').style.display = mobile?'block':'none';
+  document.getElementById('mobile-nav').style.display = mobile?'flex':'none';
+  document.getElementById('page').style.paddingBottom = mobile?'4.5rem':'2rem';
+  document.getElementById('page').style.padding = mobile?'1rem':'2rem';
+  document.getElementById('page').style.paddingBottom = mobile?'5rem':'2rem';
+}
+window.addEventListener('resize', applyLayout);
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+
+let chartInst = null;
+
+function render() {
+  const pages = {dashboard,accounts,weekly,history,forecast,settings};
+  document.getElementById('content').innerHTML = (pages[session.tab]||dashboard)();
+  if (session.tab==='accounts') initSortable();
+  if (session.tab==='history' && S.entries.length>=2) setTimeout(initChart,50);
+}
+
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
+
+function dashboard() {
+  const act = active();
+  const st = incStats();
+  const ta = totPct();
+  const totalSav = act.reduce((s,a)=>s+(a.bal||0),0);
+  const wg = act.filter(a=>a.goal);
+  const totalGoal = wg.reduce((s,a)=>s+(a.goal||0),0);
+  const totalRem = wg.reduce((s,a)=>s+Math.max(0,(a.goal||0)-(a.bal||0)),0);
+
+  const warn = Math.abs(ta-100)>0.1 ? `
+    <div style="display:flex;align-items:center;gap:.75rem;padding:1rem;border-radius:.75rem;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#fbbf24;font-size:.875rem">
+      ⚠️ Allocations total <strong style="margin:0 .25rem">${ta.toFixed(2)}%</strong> — adjust in Accounts to reach 100%
+    </div>` : '';
+
+  const statCards = [
+    {label:'Total Savings',     val:fmt(totalSav),       sub:`across ${act.length} accounts`},
+    {label:'Total Goal',        val:totalGoal>0?fmt(totalGoal):'No goals', sub:totalGoal>0?`${fmt(totalRem)} remaining`:''},
+    {label:'Avg Weekly Income', val:st.weekly>0?fmt(st.weekly):'—', sub:st.annual>0?`${fmt(st.annual)} / yr`:'No history yet'},
+    {label:'Avg Monthly',       val:st.monthly>0?fmt(st.monthly):'—', sub:S.entries.length?`${S.entries.length} weeks tracked`:''},
+  ].map(s=>`
+    <div class="card" style="display:flex;align-items:flex-start;gap:.75rem">
+      <div style="padding:.5rem;border-radius:.75rem;background:rgba(99,102,241,.1);color:#818cf8;flex-shrink:0">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+      </div>
+      <div style="min-width:0">
+        <div style="font-size:.65rem;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">${s.label}</div>
+        <div style="font-size:1.25rem;font-weight:700;color:#f9fafb;margin-top:.25rem;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.val}</div>
+        ${s.sub?`<div style="font-size:.7rem;color:#6b7280;margin-top:.2rem">${s.sub}</div>`:''}
+      </div>
+    </div>`).join('');
+
+  const accGrid = act.map(a=>{
+    const c=CM[a.color]||CM.indigo;
+    const pct=a.goal?Math.min(100,((a.bal||0)/a.goal)*100):null;
+    return `
+      <div class="card" style="border-color:${c.border}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+          <div style="display:flex;align-items:center;gap:.6rem">
+            <span style="width:10px;height:10px;border-radius:50%;background:${c.dot};flex-shrink:0"></span>
+            <span style="font-weight:500;color:#f9fafb;font-size:.875rem">${h(a.name)}</span>
+          </div>
+          <span style="font-size:.7rem;font-family:monospace;color:${c.text}">${a.pct}%</span>
+        </div>
+        <div style="font-size:1.5rem;font-weight:700;color:#f9fafb;font-variant-numeric:tabular-nums">${fmt(a.bal||0)}</div>
+        ${a.goal?`
+          <div style="margin-top:.75rem">
+            <div style="display:flex;justify-content:space-between;font-size:.7rem;color:#9ca3af;margin-bottom:.4rem">
+              <span>${pct.toFixed(0)}% of ${fmt(a.goal)}</span>
+              <span>${fmt(Math.max(0,a.goal-(a.bal||0)))} left</span>
+            </div>
+            ${bar(a.bal||0,a.goal,c.dot)}
+          </div>`:`<div style="font-size:.7rem;color:#374151;margin-top:.4rem">No goal</div>`}
+      </div>`;}).join('');
+
+  const recentRows = S.entries.slice(0,5).map(e=>`
+    <tr style="border-bottom:1px solid rgba(31,41,55,.5)">
+      <td style="padding:.6rem 1rem;color:#d1d5db">${e.date}</td>
+      <td style="padding:.6rem 1rem;text-align:right;color:#d1d5db;font-variant-numeric:tabular-nums">${fmt(e.my||0)}</td>
+      <td style="padding:.6rem 1rem;text-align:right;color:#d1d5db;font-variant-numeric:tabular-nums">${fmt(e.partner||0)}</td>
+      <td style="padding:.6rem 1rem;text-align:right;font-weight:600;color:#f9fafb;font-variant-numeric:tabular-nums">${fmt(e.total||0)}</td>
+    </tr>`).join('');
+
+  return `
+    <div style="display:flex;flex-direction:column;gap:1.5rem">
+      ${warn}
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem">${statCards}</div>
+      <div>
+        <div style="font-size:.7rem;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem">Accounts</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.75rem">${accGrid}</div>
+      </div>
+      ${S.entries.length?`
+        <div>
+          <div style="font-size:.7rem;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem">Recent Weeks</div>
+          <div class="card" style="padding:0;overflow:hidden">
+            <table style="width:100%;border-collapse:collapse;font-size:.875rem">
+              <thead><tr style="border-bottom:1px solid #1f2937">
+                <th style="text-align:left;padding:.75rem 1rem;color:#9ca3af;font-weight:500">Date</th>
+                <th style="text-align:right;padding:.75rem 1rem;color:#9ca3af;font-weight:500">${h(S.cfg.myName)}</th>
+                <th style="text-align:right;padding:.75rem 1rem;color:#9ca3af;font-weight:500">${h(S.cfg.partnerName)}</th>
+                <th style="text-align:right;padding:.75rem 1rem;color:#9ca3af;font-weight:500">Total</th>
+              </tr></thead>
+              <tbody>${recentRows}</tbody>
+            </table>
+          </div>
+        </div>` : ''}
+    </div>`;
+}
+
+// ─── ACCOUNTS ─────────────────────────────────────────────────────────────────
+
+function accounts() {
+  const act = S.accounts.filter(a=>a.active).sort((a,b)=>a.order-b.order);
+  const arch = S.accounts.filter(a=>!a.active).sort((a,b)=>a.order-b.order);
+  const displayed = session.showArch ? [...act,...arch] : act;
+  const ta = totPct();
+
+  const rows = displayed.map(a=>{
+    const c=CM[a.color]||CM.indigo;
+    return `
+      <div class="card" data-id="${a.id}" style="display:flex;align-items:center;gap:.75rem;${!a.active?'opacity:.55':''}">
+        <span class="drag-handle" style="cursor:grab;color:#4b5563;flex-shrink:0;line-height:0" title="Drag to reorder">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+        </span>
+        <span style="width:12px;height:12px;border-radius:50%;background:${c.dot};flex-shrink:0"></span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <span style="font-weight:500;font-size:.875rem;color:${a.active?'#f9fafb':'#9ca3af'}">${h(a.name)}</span>
+            ${!a.active?'<span style="font-size:.65rem;background:#1f2937;color:#9ca3af;padding:.15rem .5rem;border-radius:9999px">Archived</span>':''}
+          </div>
+          ${a.goal?`
+            <div style="margin-top:.4rem">${bar(a.bal||0,a.goal,c.dot)}</div>
+            <div style="font-size:.7rem;color:#6b7280;margin-top:.25rem">${fmt(a.bal||0)} / ${fmt(a.goal)}</div>`
+            :`<div style="font-size:.7rem;color:#6b7280;margin-top:.2rem">${fmt(a.bal||0)}</div>`}
+        </div>
+        <div style="display:flex;align-items:center;gap:.75rem;flex-shrink:0">
+          <span style="font-size:.8rem;font-family:monospace;color:${c.text}">${a.pct}%</span>
+          <div style="display:flex;gap:.2rem">
+            <button class="btn-ghost" onclick="editAcc('${a.id}')" title="Edit">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="btn-ghost" onclick="toggleArch('${a.id}')" title="${a.active?'Archive':'Restore'}">
+              ${a.active
+                ?`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>`
+                :`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 .49-3.96"/></svg>`}
+            </button>
+            <button class="btn-ghost" onclick="delAcc('${a.id}','${h(a.name)}')" title="Delete" style="color:#f87171">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>`;}).join('');
+
+  return `
+    <div style="display:flex;flex-direction:column;gap:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem">
+        <div>
+          <div style="font-size:1rem;font-weight:600;color:#f9fafb">Accounts</div>
+          <div style="font-size:.875rem;color:${Math.abs(ta-100)<0.1?'#34d399':'#fbbf24'};margin-top:.15rem">
+            ${ta.toFixed(2)}% allocated ${Math.abs(ta-100)>0.1?`<span style="font-size:.75rem">(${(100-ta).toFixed(2)}% unassigned)</span>`:''}
+          </div>
+        </div>
+        <div style="display:flex;gap:.5rem">
+          ${arch.length?`<button class="btn btn-secondary" onclick="session.showArch=!session.showArch;render()">${session.showArch?'Hide':'Show'} Archived (${arch.length})</button>`:''}
+          <button class="btn btn-primary" onclick="newAcc()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Account
+          </button>
+        </div>
+      </div>
+      <div id="acc-list" style="display:flex;flex-direction:column;gap:.5rem">${rows}</div>
+      ${!displayed.length?`<div style="text-align:center;padding:4rem 0;color:#6b7280"><p>No accounts yet.</p></div>`:''}
+    </div>`;
+}
+
+function initSortable() {
+  const list = document.getElementById('acc-list');
+  if(!list||!window.Sortable) return;
+  Sortable.create(list,{
+    animation:150, handle:'.drag-handle', ghostClass:'sortable-ghost',
+    onEnd:()=>{
+      const ids=[...list.querySelectorAll('[data-id]')].map(el=>el.dataset.id);
+      const map=Object.fromEntries(S.accounts.map(a=>[a.id,a]));
+      ids.forEach((id,i)=>{ if(map[id]) map[id].order=i; });
+      saveState();
+    }
+  });
+}
+
+// ─── WEEKLY ───────────────────────────────────────────────────────────────────
+
+function weekly() {
+  const myV=parseFloat(session.myInc)||0;
+  const parV=parseFloat(session.parInc)||0;
+  const total=myV+parV;
+  const act=active();
+  const al=total>0?alloc(total):{};
+  const ta=totPct();
+
+  const allocTable = total>0 ? buildAllocTable(total, act) : '';
+
+  return `
+    <div style="display:flex;flex-direction:column;gap:1.25rem;max-width:48rem">
+      <div>
+        <div style="font-size:1rem;font-weight:600;color:#f9fafb">Weekly Income Entry</div>
+        <div style="font-size:.875rem;color:#9ca3af;margin-top:.2rem">Enter this week's income to see recommended allocations.</div>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column;gap:1rem">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+          <div>
+            <label class="lbl">${h(S.cfg.myName)}'s Income</label>
+            <div style="position:relative">
+              <span style="position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:#9ca3af;font-size:.875rem">${h(S.cfg.sym)}</span>
+              <input class="inp" style="padding-left:1.75rem" type="number" min="0" step="0.01" value="${session.myInc}" placeholder="0.00" oninput="session.myInc=this.value;refreshAllocTable()">
+            </div>
+          </div>
+          <div>
+            <label class="lbl">${h(S.cfg.partnerName)}'s Income</label>
+            <div style="position:relative">
+              <span style="position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:#9ca3af;font-size:.875rem">${h(S.cfg.sym)}</span>
+              <input class="inp" style="padding-left:1.75rem" type="number" min="0" step="0.01" value="${session.parInc}" placeholder="0.00" oninput="session.parInc=this.value;refreshAllocTable()">
+            </div>
+          </div>
+        </div>
+        ${total>0?`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:.75rem;border-top:1px solid #1f2937"><span style="font-size:.875rem;color:#9ca3af">Total Household Income</span><span style="font-size:1.25rem;font-weight:700;color:#f9fafb;font-variant-numeric:tabular-nums">${fmtD(total)}</span></div>`:''}
+      </div>
+      ${Math.abs(ta-100)>0.1?`<div style="display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;border-radius:.75rem;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#fbbf24;font-size:.875rem">⚠️ Allocations total ${ta.toFixed(2)}% — adjust in Accounts to reach 100%.</div>`:''}
+      <div id="alloc-table">${allocTable}</div>
+      <div class="card" style="display:flex;flex-direction:column;gap:1rem">
+        <div>
+          <label class="lbl">Notes <span style="text-transform:none;color:#6b7280;font-weight:400">(optional)</span></label>
+          <textarea class="inp" rows="2" style="resize:none" placeholder="e.g. Big week — client invoice paid" oninput="session.notes=this.value">${h(session.notes)}</textarea>
+        </div>
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <input type="checkbox" id="apply-bal" ${session.applyBal?'checked':''} onchange="session.applyBal=this.checked" style="width:16px;height:16px;accent-color:#6366f1">
+          <label for="apply-bal" style="font-size:.875rem;color:#d1d5db;cursor:pointer">Also add allocations to account balances</label>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:.75rem">
+          ${session.weeklySaved?`<span style="display:flex;align-items:center;gap:.4rem;color:#34d399;font-size:.875rem">✓ Saved!</span>`:''}
+          <button class="btn btn-primary" onclick="saveWeek()" ${total===0?'disabled':''}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Save This Week
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// updateAllocTable replaced by refreshAllocTable (defined above)
+
+function saveWeek() {
+  const myV=parseFloat(session.myInc)||0, parV=parseFloat(session.parInc)||0, total=myV+parV;
+  if(!total) return;
+  const entry={id:uid(),date:new Date().toISOString().split('T')[0],my:myV,partner:parV,total,notes:session.notes};
+  S.entries.unshift(entry);
+  S.snaps.push({id:uid(),entryId:entry.id,date:entry.date,bals:Object.fromEntries(S.accounts.map(a=>[a.id,a.bal||0]))});
+  if(session.applyBal){const al=computeAlloc(total); S.accounts.forEach(a=>{if(a.active)a.bal=(a.bal||0)+(al[a.id]||0);});}
+  session.overrides={};
+  saveState();
+  session.myInc=''; session.parInc=''; session.notes=''; session.weeklySaved=true;
+  render();
+  setTimeout(()=>{session.weeklySaved=false;},3000);
+}
+
+// ─── HISTORY ──────────────────────────────────────────────────────────────────
+
+function history() {
+  const st=incStats();
+  if(!S.entries.length) return `<div style="display:flex;flex-direction:column;gap:1.5rem"><div style="font-size:1rem;font-weight:600;color:#f9fafb">Income History</div><div style="text-align:center;padding:5rem 0;color:#6b7280">No weeks saved yet. Head to Weekly Entry to get started.</div></div>`;
+  const sorted=[...S.entries].sort((a,b)=>b.date.localeCompare(a.date));
+  return `
+    <div style="display:flex;flex-direction:column;gap:1.25rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem">
+        <div style="font-size:1rem;font-weight:600;color:#f9fafb">Income History</div>
+        <div style="display:flex;gap:.5rem">
+          <button class="btn btn-secondary" onclick="exportIncome()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Income CSV
+          </button>
+          <button class="btn btn-secondary" onclick="exportBalances()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Balances CSV
+          </button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem">
+        ${[{l:'Avg Weekly',v:fmt(st.weekly)},{l:'Avg Monthly',v:fmt(st.monthly)},{l:'Annualised',v:fmt(st.annual)},{l:'Weeks Tracked',v:String(S.entries.length)}].map(s=>`
+          <div class="card"><div style="font-size:.65rem;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">${s.l}</div><div style="font-size:1.25rem;font-weight:700;color:#f9fafb;margin-top:.25rem;font-variant-numeric:tabular-nums">${s.v}</div></div>`).join('')}
+      </div>
+      ${S.entries.length>=2?`<div class="card"><div style="font-size:.7rem;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:1rem">Income Over Time</div><div style="height:200px"><canvas id="income-chart"></canvas></div></div>`:''}
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:.875rem">
+            <thead><tr style="border-bottom:1px solid #1f2937">
+              <th style="text-align:left;padding:.75rem 1rem;color:#9ca3af;font-weight:500">Date</th>
+              <th style="text-align:right;padding:.75rem 1rem;color:#9ca3af;font-weight:500">${h(S.cfg.myName)}</th>
+              <th style="text-align:right;padding:.75rem 1rem;color:#9ca3af;font-weight:500">${h(S.cfg.partnerName)}</th>
+              <th style="text-align:right;padding:.75rem 1rem;color:#9ca3af;font-weight:500">Total</th>
+              <th style="padding:.75rem 1rem"></th>
+            </tr></thead>
+            <tbody>${sorted.map(e=>`
+              <tr style="border-bottom:1px solid rgba(31,41,55,.5)">
+                <td style="padding:.75rem 1rem;color:#d1d5db">${e.date}</td>
+                <td style="padding:.75rem 1rem;text-align:right;color:#d1d5db;font-variant-numeric:tabular-nums">${fmt(e.my||0)}</td>
+                <td style="padding:.75rem 1rem;text-align:right;color:#d1d5db;font-variant-numeric:tabular-nums">${fmt(e.partner||0)}</td>
+                <td style="padding:.75rem 1rem;text-align:right;font-weight:600;color:#f9fafb;font-variant-numeric:tabular-nums">${fmt(e.total||0)}</td>
+                <td style="padding:.75rem 1rem;text-align:right">
+                  <button class="btn-ghost" onclick="delEntry('${e.id}')" style="color:#f87171">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                  </button>
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+
+function initChart() {
+  const canvas=document.getElementById('income-chart');
+  if(!canvas||!window.Chart) return;
+  if(chartInst){chartInst.destroy();chartInst=null;}
+  const sorted=[...S.entries].sort((a,b)=>a.date.localeCompare(b.date));
+  chartInst=new Chart(canvas,{
+    type:'line',
+    data:{labels:sorted.map(e=>e.date.slice(5)),datasets:[
+      {label:S.cfg.myName,     data:sorted.map(e=>e.my||0),      borderColor:'#818cf8',backgroundColor:'transparent',tension:.3,pointRadius:3,borderWidth:2},
+      {label:S.cfg.partnerName,data:sorted.map(e=>e.partner||0), borderColor:'#34d399',backgroundColor:'transparent',tension:.3,pointRadius:3,borderWidth:2},
+      {label:'Total',          data:sorted.map(e=>e.total||0),   borderColor:'#f59e0b',backgroundColor:'transparent',tension:.3,pointRadius:3,borderWidth:2.5},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#9ca3af',boxWidth:12}},tooltip:{callbacks:{label:ctx=>`${S.cfg.sym}${ctx.raw.toLocaleString()}`}}},
+      scales:{x:{ticks:{color:'#9ca3af',font:{size:11}},grid:{color:'#1f2937'}},y:{ticks:{color:'#9ca3af',font:{size:11},callback:v=>`${S.cfg.sym}${(v/1000).toFixed(0)}k`},grid:{color:'#1f2937'}}},
+    }
+  });
+}
+
+// ─── FORECAST ─────────────────────────────────────────────────────────────────
+
+function forecast() {
+  const st=incStats();
+  const inc=parseFloat(session.forecastInc)||st.weekly;
+  const act=active();
+  const al=inc>0?alloc(inc):{};
+  const wg=act.filter(a=>a.goal);
+  const ng=act.filter(a=>!a.goal);
+
+  return `
+    <div style="display:flex;flex-direction:column;gap:1.5rem">
+      <div>
+        <div style="font-size:1rem;font-weight:600;color:#f9fafb">Goal Forecasting</div>
+        <div style="font-size:.875rem;color:#9ca3af;margin-top:.2rem">Estimates based on average income and current allocations.</div>
+      </div>
+      <div class="card" style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:1rem">
+        <div style="flex:1;min-width:10rem">
+          <label class="lbl">Weekly Income to Use</label>
+          <div style="position:relative">
+            <span style="position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:#9ca3af;font-size:.875rem">${h(S.cfg.sym)}</span>
+            <input class="inp" style="padding-left:1.75rem" type="number" min="0" step="0.01" value="${session.forecastInc}" placeholder="${st.weekly>0?Math.round(st.weekly):'Enter amount'}" oninput="session.forecastInc=this.value;render()">
+          </div>
+          ${st.weekly>0&&!session.forecastInc?`<div style="font-size:.7rem;color:#6b7280;margin-top:.25rem">Using ${S.entries.length}-week average</div>`:''}
+        </div>
+        ${inc>0?`<div style="font-size:.875rem;color:#9ca3af;padding-bottom:.25rem">Monthly ≈ <strong style="color:#f9fafb">${fmt(inc*(52/12))}</strong> · Annual ≈ <strong style="color:#f9fafb">${fmt(inc*52)}</strong></div>`:''}
+      </div>
+      ${!wg.length?`<div style="text-align:center;padding:4rem 0;color:#6b7280">No accounts with goals. Add goals via the Accounts page.</div>`:`
+      <div style="display:flex;flex-direction:column;gap:.75rem">
+        <div style="font-size:.7rem;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">Accounts with Goals</div>
+        ${wg.map(a=>{
+          const weekly=al[a.id]||0, weeks=weeksLeft(a.bal||0,a.goal,weekly);
+          const pct=Math.min(100,((a.bal||0)/a.goal)*100), rem=Math.max(0,a.goal-(a.bal||0));
+          const c=CM[a.color]||CM.indigo, done=rem<=0;
+          return `
+            <div class="card">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+                <div style="display:flex;align-items:center;gap:.6rem">
+                  <span style="width:12px;height:12px;border-radius:50%;background:${c.dot};flex-shrink:0"></span>
+                  <div>
+                    <div style="font-weight:600;color:#f9fafb">${h(a.name)}</div>
+                    <div style="font-size:.7rem;color:#9ca3af;margin-top:.15rem">${fmtD(weekly)}/wk · ${a.pct}%</div>
+                  </div>
+                </div>
+                <div style="text-align:right">
+                  ${done?`<div style="color:#34d399;font-weight:600">Goal reached! 🎉</div>`
+                    :weeks!==null?`<div style="color:#f9fafb;font-weight:600">${dateInWeeks(weeks)}</div><div style="font-size:.7rem;color:#9ca3af">${weeks} ${weeks===1?'week':'weeks'} away</div>`
+                    :`<div style="color:#6b7280;font-size:.875rem">Enter income above</div>`}
+                </div>
+              </div>
+              <div style="margin-top:1rem">
+                <div style="display:flex;justify-content:space-between;font-size:.7rem;color:#9ca3af;margin-bottom:.4rem">
+                  <span>${fmt(a.bal||0)} saved</span><span>${fmt(a.goal)} goal</span>
+                </div>
+                ${bar(a.bal||0,a.goal,c.dot)}
+                <div style="display:flex;justify-content:space-between;font-size:.7rem;margin-top:.35rem">
+                  <span style="color:#6b7280">${pct.toFixed(1)}% complete</span>
+                  <span style="color:#9ca3af">${fmt(rem)} remaining</span>
+                </div>
+              </div>
+            </div>`;}).join('')}
+      </div>`}
+      ${ng.length?`
+      <div style="display:flex;flex-direction:column;gap:.5rem">
+        <div style="font-size:.7rem;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">Uncapped Accounts</div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <table style="width:100%;border-collapse:collapse;font-size:.875rem">
+            <thead><tr style="border-bottom:1px solid #1f2937">
+              <th style="text-align:left;padding:.75rem 1rem;color:#9ca3af;font-weight:500">Account</th>
+              <th style="text-align:right;padding:.75rem 1rem;color:#9ca3af;font-weight:500">%</th>
+              <th style="text-align:right;padding:.75rem 1rem;color:#9ca3af;font-weight:500">Weekly</th>
+              <th style="text-align:right;padding:.75rem 1rem;color:#9ca3af;font-weight:500">Balance</th>
+            </tr></thead>
+            <tbody>${ng.map(a=>{const c=CM[a.color]||CM.indigo;return `
+              <tr style="border-bottom:1px solid rgba(31,41,55,.5)">
+                <td style="padding:.75rem 1rem"><div style="display:flex;align-items:center;gap:.5rem"><span style="width:8px;height:8px;border-radius:50%;background:${c.dot}"></span><span style="color:#f9fafb">${h(a.name)}</span></div></td>
+                <td style="padding:.75rem 1rem;text-align:right;font-family:monospace;color:${c.text}">${a.pct}%</td>
+                <td style="padding:.75rem 1rem;text-align:right;color:#d1d5db;font-variant-numeric:tabular-nums">${fmtD(al[a.id]||0)}</td>
+                <td style="padding:.75rem 1rem;text-align:right;color:#d1d5db;font-variant-numeric:tabular-nums">${fmt(a.bal||0)}</td>
+              </tr>`;}).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`:''}
+    </div>`;
+}
+
+// ─── SETTINGS ─────────────────────────────────────────────────────────────────
+
+function settings() {
+  return `
+    <div style="display:flex;flex-direction:column;gap:1.25rem;max-width:28rem">
+      <div style="font-size:1rem;font-weight:600;color:#f9fafb">Settings</div>
+      <div class="card" style="display:flex;flex-direction:column;gap:1rem">
+        <div style="font-size:.875rem;font-weight:500;color:#f9fafb">Household</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+          <div><label class="lbl">Your Name</label><input class="inp" value="${h(S.cfg.myName)}" oninput="S.cfg.myName=this.value;saveState()"></div>
+          <div><label class="lbl">Partner's Name</label><input class="inp" value="${h(S.cfg.partnerName)}" oninput="S.cfg.partnerName=this.value;saveState()"></div>
+        </div>
+        <div><label class="lbl">Currency Symbol</label><input class="inp" style="width:5rem" value="${h(S.cfg.sym)}" oninput="S.cfg.sym=this.value;saveState()" maxlength="3"></div>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column;gap:.75rem">
+        <div style="font-size:.875rem;font-weight:500;color:#f9fafb">Export</div>
+        <button class="btn btn-secondary" style="width:100%;justify-content:center" onclick="exportAccounts()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export Accounts CSV
+        </button>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column;gap:.75rem;border-color:rgba(244,63,94,.2)">
+        <div style="font-size:.875rem;font-weight:500;color:#fb7185">⚠️ Danger Zone</div>
+        <button class="btn btn-secondary" style="width:100%;justify-content:center;color:#fb7185;border-color:rgba(244,63,94,.3)" onclick="resetAll()">Reset to Default Accounts</button>
+      </div>
+    </div>`;
+}
+
+// ─── ACCOUNT MODAL ────────────────────────────────────────────────────────────
+
+function newAcc() {
+  session.modalAccId=null;
+  session.mf={name:'',pct:0,bal:0,goal:'',rule:'redistribute',destId:'',active:true,color:'indigo'};
+  openAccModal();
+}
+function editAcc(id) {
+  const a=S.accounts.find(x=>x.id===id); if(!a) return;
+  session.modalAccId=id;
+  session.mf={...a,goal:a.goal!=null?a.goal:''};
+  openAccModal();
+}
+function openAccModal() {
+  const f=session.mf;
+  const isEdit=!!session.modalAccId;
+  const others=S.accounts.filter(a=>a.id!==session.modalAccId&&a.active);
+  const colorPicker=COLORS.map(c=>`
+    <button type="button" onclick="session.mf.color='${c}';openAccModal()"
+      style="width:28px;height:28px;border-radius:50%;background:${CM[c].dot};cursor:pointer;border:${f.color===c?'3px solid white':'2px solid transparent'};transform:${f.color===c?'scale(1.15)':'scale(1)'};opacity:${f.color===c?1:.6};transition:all .15s">
+    </button>`).join('');
+  document.getElementById('modal-inner').innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:1.25rem;border-bottom:1px solid #1f2937">
+      <div style="font-size:1rem;font-weight:600;color:#f9fafb">${isEdit?'Edit Account':'New Account'}</div>
+      <button onclick="closeModal()" style="padding:.375rem;border-radius:.5rem;background:transparent;border:none;color:#9ca3af;cursor:pointer;line-height:0">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div style="padding:1.25rem;display:flex;flex-direction:column;gap:1rem">
+      <div><label class="lbl">Account Name</label><input class="inp" id="modal-name" value="${h(f.name||'')}" oninput="session.mf.name=this.value" placeholder="e.g. Travel Fund"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div><label class="lbl">Allocation %</label><input class="inp" type="number" min="0" max="100" step="0.01" value="${f.pct??0}" oninput="session.mf.pct=parseFloat(this.value)||0"></div>
+        <div><label class="lbl">Current Balance</label><input class="inp" type="number" min="0" step="0.01" value="${f.bal??0}" oninput="session.mf.bal=parseFloat(this.value)||0"></div>
+      </div>
+      <div><label class="lbl">Goal / Cap <span style="text-transform:none;color:#6b7280;font-weight:400">(optional)</span></label><input class="inp" type="number" min="0" step="0.01" value="${f.goal??''}" oninput="session.mf.goal=this.value" placeholder="Leave blank for no goal"></div>
+      <div><label class="lbl">When Goal is Reached</label>
+        <select class="inp" onchange="session.mf.rule=this.value;openAccModal()">
+          <option value="stop" ${f.rule==='stop'?'selected':''}>Stop allocating</option>
+          <option value="redirect" ${f.rule==='redirect'?'selected':''}>Redirect to another account</option>
+          <option value="redistribute" ${!f.rule||f.rule==='redistribute'?'selected':''}>Redistribute proportionally</option>
+        </select>
+      </div>
+      ${f.rule==='redirect'?`<div><label class="lbl">Redirect To</label><select class="inp" onchange="session.mf.destId=this.value"><option value="">Select account…</option>${others.map(a=>`<option value="${a.id}" ${f.destId===a.id?'selected':''}>${h(a.name)}</option>`).join('')}</select></div>`:''}
+      <div><label class="lbl">Colour</label><div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.25rem">${colorPicker}</div></div>
+      <div style="display:flex;align-items:center;gap:.5rem">
+        <input type="checkbox" id="modal-active" ${f.active!==false?'checked':''} onchange="session.mf.active=this.checked" style="width:16px;height:16px;accent-color:#6366f1">
+        <label for="modal-active" style="font-size:.875rem;color:#d1d5db;cursor:pointer">Active</label>
+      </div>
+      <div style="display:flex;gap:.75rem;padding-top:.25rem">
+        <button class="btn btn-secondary" style="flex:1;justify-content:center" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="saveAcc()">${isEdit?'Save Changes':'Add Account'}</button>
+      </div>
+    </div>`;
+  document.getElementById('modal').style.display='flex';
+  setTimeout(()=>document.getElementById('modal-name')?.focus(),50);
+}
+
+function closeModal() { document.getElementById('modal').style.display='none'; session.mf={}; session.modalAccId=null; }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
+
+function saveAcc() {
+  const f=session.mf; if(!f.name?.trim()) return;
+  const data={name:f.name.trim(),pct:parseFloat(f.pct)||0,bal:parseFloat(f.bal)||0,
+    goal:f.goal!==''&&f.goal!=null?parseFloat(f.goal)||null:null,
+    rule:f.rule||'redistribute',destId:f.rule==='redirect'?f.destId:'',
+    active:f.active!==false,color:f.color||'indigo'};
+  if(session.modalAccId){
+    const a=S.accounts.find(x=>x.id===session.modalAccId);
+    if(a) Object.assign(a,data);
+  } else {
+    const maxO=S.accounts.reduce((m,a)=>Math.max(m,a.order),-1);
+    S.accounts.push({...data,id:uid(),order:maxO+1});
+  }
+  saveState(); closeModal(); render();
+}
+
+// ─── OTHER ACTIONS ────────────────────────────────────────────────────────────
+
+function toggleArch(id) { const a=S.accounts.find(x=>x.id===id); if(a){a.active=!a.active;saveState();render();} }
+function delAcc(id,name) { if(confirm(`Delete "${name}"? This cannot be undone.`)){S.accounts=S.accounts.filter(a=>a.id!==id);saveState();render();} }
+function delEntry(id) { if(!confirm('Delete this week?')) return; S.entries=S.entries.filter(e=>e.id!==id); S.snaps=S.snaps.filter(s=>s.entryId!==id); saveState(); render(); }
+function exportIncome() { dlCSV(toCSV([['Date',S.cfg.myName+' Income',S.cfg.partnerName+' Income','Total','Notes'],...S.entries.map(e=>[e.date,e.my,e.partner,e.total,e.notes||''])]),'weekly-history.csv'); }
+function exportBalances() { const s=[...S.snaps].sort((a,b)=>a.date.localeCompare(b.date)); dlCSV(toCSV([['Date',...S.accounts.map(a=>a.name)],...s.map(x=>[x.date,...S.accounts.map(a=>x.bals[a.id]??'')])]),'balance-history.csv'); }
+function exportAccounts() { dlCSV(toCSV([['Name','%','Balance','Goal','Rule','Active'],...S.accounts.map(a=>[a.name,a.pct,a.bal||0,a.goal??'',a.rule,a.active])]),'accounts.csv'); }
+function resetAll() { if(!confirm('Reset all accounts to defaults and clear all history?')) return; S.accounts=JSON.parse(JSON.stringify(DEFAULT_ACCOUNTS)); S.entries=[]; S.snaps=[]; saveState(); render(); }
+
+// ─── BOOT ─────────────────────────────────────────────────────────────────────
+
+applyLayout();
+renderNav();
+render();
+</script>
+</body>
+</html>
